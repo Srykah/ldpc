@@ -3,7 +3,6 @@
 
 int main()
 {
-    std::cout << "Hello World !" << std::endl;
     Matrice test({
         { 0, 5, 7, 9 },
         { 0, 3, 4, 10 },
@@ -22,9 +21,12 @@ int main()
         { 0, 2, 3, 5 }
     });
 
-    gauss_jordan(test);
+    // gauss_jordan(test);
+    // std::cout << "\ntest :\n" << test << "\ntest2 :\n" << test2 << std::endl;
 
-    std::cout << "\ntest :\n" << test << "\ntest2 :\n" << test2 << std::endl;
+    Matrice test3 = gallager(12, 4, 9);
+
+    std::cout << "\ntest3 : \n" << test3 << std::endl;
 
     return 0;
 }
