@@ -1,8 +1,8 @@
 #include "fonctions.hpp"
 #include <algorithm>
-
 #include <random>
 #include <iostream>
+#include <stdexcept>
 
 std::ostream& operator<< (std::ostream& os, const Matrice& mat) {
     for (const Row& row : mat) {
@@ -90,4 +90,33 @@ void gauss_jordan(Matrice& mat) {
             annulation(mat, r);
         }
     }
+}
+
+Matrice gallager(int n, int j, int k) {
+    if (n/float(j) != n/j)
+        throw std::domain_error("Gallager : invalid arguments");
+
+    int i = k*j/n;
+    Matrice matrice;
+    matrice.resize(k);
+
+    std::vector<int> perm(n, 0);
+    for (int x = 0; x < n; x++) {
+        perm[x] = x;
+    }
+
+    for (int r = 0; r < n/j; r++) { // w = indice de la ligne dans la sous-matrice
+        for (int c = r*j; c < (r+1)*j; c++) {// s = indice de la colonne
+            matrice[r].push_back(c);
+        }
+    }
+    for (int s = 1; s < n/j; s++) { // s = indice de la sous-matrice
+        std::shuffle(perm.begin(), perm.end(), mt);
+        for (int c = 0; c < n; c++) {
+            int r = s*(n/j) + int(perm[c] / j);
+            matrice[r].push_back(c);
+        }
+    }
+
+    return matrice;
 }
