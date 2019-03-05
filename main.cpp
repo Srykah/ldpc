@@ -1,32 +1,34 @@
-#include <iostream>
 #include "fonctions.hpp"
+#include <iostream>
+#include <algorithm>
+
+/** TODO :
+ * Faire la diff entre MatricePleine et MatriceCreuse
+ * Checker les dimensions dans le produit
+ * Passer en POO
+**/
 
 int main()
 {
-    Matrice test({
-        { 0, 5, 7, 9 },
-        { 0, 3, 4, 10 },
-        { 1, 4, 6, 8 },
-        { 2, 5, 10, 11 },
-        { 2, 6, 7, 11 },
-        { 1, 4, 8, 10 },
-        { 0, 3, 6, 9 },
-        { 1, 5, 7, 9 },
-        { 2, 3, 8, 11 }
-    });
+    Params p {12, 3, 4, 9};
+    Matrice H;
+    Matrice gj;
+    do {
+        H = macKayNeal(p);
+        gj = gauss_jordan(H);
+    } while (!isFullRank(gj));
+    std::cout << "H:\n" << H << std::endl;
 
-    Matrice test2({
-        { 1, 2, 4, 5 },
-        { 0, 1, 3, 4 },
-        { 0, 2, 3, 5 }
-    });
+    Matrice P = getP(gj);
+    std::cout << "P:\n" << P << std::endl;
 
-    // gauss_jordan(test);
-    // std::cout << "\ntest :\n" << test << "\ntest2 :\n" << test2 << std::endl;
+    Matrice u {Row(p.n-p.k)};
+    std::generate(u[0].begin(), u[0].end(), [](){ return randomInt(0, 1); });
+    std::cout << "u :\t" << u << std::endl;
 
-    Matrice test3 = gallager(12, 4, 9);
-
-    std::cout << "\ntest3 : \n" << test3 << std::endl;
+    Matrice code = u * P;
+    code[0].insert(code[0].end(), u[0].begin(), u[0].end());
+    std::cout << "code :\t" << code << std::endl;
 
     return 0;
 }

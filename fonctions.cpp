@@ -3,25 +3,52 @@
 #include <random>
 #include <iostream>
 #include <stdexcept>
+#include <chrono>
+
+namespace {
+    const size_t NB_ESSAIS = 10;
+    std::mt19937 mt(std::chrono::system_clock::now().time_since_epoch().count());
+}
 
 std::ostream& operator<< (std::ostream& os, const Matrice& mat) {
     for (const Row& row : mat) {
+        os << "{";
         for (int x : row) {
             os << x << '\t';
         }
-        os << '\n';
+        os << "}\n";
     }
 
     return os;
 }
 
-namespace {
-    std::random_device rd;
-    std::mt19937 mt(rd());
-    int randint(int min, int max) {
-        return std::uniform_int_distribution<>(min, max)(mt);
+Matrice operator* (const Matrice& lhs, const Matrice& rhs) {
+    size_t hauteur = lhs.size(), largeur = rhs[0].size();
+    Matrice result(hauteur, Row(largeur, 0));
+    for (int x = 0; x < largeur; x++) {
+        for (int y = 0; y < hauteur; y++) {
+            for (int z = 0; z < rhs.size(); z++) {
+                result[y][x] += lhs[y][z] * rhs[z][x];
+                result[y][x] %= 2;
+            }
+        }
     }
-    auto pred = [](auto& elem){ return true; };
+    return result;
+}
+
+Matrice toFull(const Matrice& mat, int rowSize) {
+    Matrice result(mat.size(), Row(rowSize, 0));
+    for (int i(0); i < mat.size(); i++) {
+        const Row& row = mat[i];
+        for (int val : row)
+            result[i][val] = 1;
+    }
+
+    return result;
+}
+
+int randomInt(int min, int max) {
+    return std::uniform_int_distribution<int>(min,max)(mt);
 }
 
 void swapColumns(Matrice& mat, int r, int x) {
@@ -60,63 +87,144 @@ void transvection(Row& row_r, Row& row_x) {
 }
 
 void annulation(Matrice& mat, int r) {
-    for (int y(r+1); y < mat.size(); y++) {
-        if (std::find(mat[y].begin(), mat[y].end(), r) != mat[y].end()) {
+    for (int y(0); y < mat.size(); y++) {
+        if (y != r && std::find(mat[y].begin(), mat[y].end(), r) != mat[y].end()) {
             transvection(mat[r], mat[y]);
         }
     }
 }
 
-void gauss_jordan(Matrice& mat) {
+Matrice gauss_jordan(Matrice mat) {
     for (int r(0); r < mat.size(); r++) {
-        std::cout << "r = " << r << std::endl;
-        RowIt it = std::find_if(mat[r].begin()+r, mat[r].end(), pred);
         int y(r);
+        RowIt it = std::find_if(mat[y].begin(), mat[y].end(), [r](int x){ return x >= r; });
         while (y < mat.size()-1 && it == mat[y].end()) {
             y++;
-            it = std::find_if(mat[y].begin()+r, mat[y].end(), pred);
+            it = std::find_if(mat[y].begin(), mat[y].end(), [r](int x){ return x >= r; });
         }
         if (it != mat[y].end()) {
             int x = *it;
-            std::cout << "\t(x,y) = (" << x << ',' << y << ')' << std::endl;
-            if (y != r) {
-                std::cout << "\tswapping lines " << r << " and " << y << std::endl;
+            if (y != r)
                 std::swap(mat[y], mat[r]);
-            }
-            if (x != r) {
-                std::cout << "\tswapping columns " << r << " and " << x << std::endl;
+            if (x != r)
                 swapColumns(mat, r, x);
-            }
             annulation(mat, r);
         }
     }
+    return mat;
 }
 
-Matrice gallager(int n, int j, int k) {
-    if (n/float(j) != n/j)
+bool isFullRank(const Matrice& mat) {
+    size_t hauteur = mat.size();
+    for (int i = 0; i < hauteur; i++) {
+        if (mat[i].empty() || mat[i][0] != i ||(mat[i].size() > 1 && mat[i][1] < hauteur))
+            return false;
+    }
+    return true;
+}
+
+Matrice gallager(Params p) {
+    if (p.n/float(p.j) != p.n/p.j)
         throw std::domain_error("Gallager : invalid arguments");
 
-    int i = k*j/n;
     Matrice matrice;
-    matrice.resize(k);
+    matrice.resize(p.k);
 
-    std::vector<int> perm(n, 0);
-    for (int x = 0; x < n; x++) {
-        perm[x] = x;
-    }
+    std::vector<int> perm(p.n, 0);
+    std::iota(perm.begin(), perm.end(), 0); // perm[x] = x;
 
-    for (int r = 0; r < n/j; r++) { // w = indice de la ligne dans la sous-matrice
-        for (int c = r*j; c < (r+1)*j; c++) {// s = indice de la colonne
+    for (int r = 0; r < p.n/p.j; r++) { // w = indice de la ligne dans la sous-matrice
+        for (int c = r*p.j; c < (r+1)*p.j; c++) {// s = indice de la colonne
             matrice[r].push_back(c);
         }
     }
-    for (int s = 1; s < n/j; s++) { // s = indice de la sous-matrice
+    for (int s = 1; s < p.n/p.j; s++) { // s = indice de la sous-matrice
         std::shuffle(perm.begin(), perm.end(), mt);
-        for (int c = 0; c < n; c++) {
-            int r = s*(n/j) + int(perm[c] / j);
+        for (int c = 0; c < p.n; c++) {
+            int r = s*(p.n/p.j) + int(perm[c] / p.j);
             matrice[r].push_back(c);
         }
     }
 
     return matrice;
+}
+
+namespace {
+    bool helper(Matrice& mat, const Params& p, int c, Row& liste) {
+        if (c == p.n)
+            return liste.empty();
+        if (liste.size() < p.i)
+            return false;
+
+        for (int _ = 0; _ < NB_ESSAIS; _++) {
+            std::shuffle(liste.begin(), liste.end(), mt);
+            Row debut(liste.begin(), liste.begin()+p.i);
+            for (int x : debut)
+                mat[x].push_back(c);
+            std::sort(liste.begin(), liste.end(), [&p, &mat](int x, int y){
+                return mat[x].size() < p.j;
+            });
+            RowIt it = std::find_if(liste.begin(), liste.end(), [&p, &mat](int x){ return mat[x].size() >= p.j; });
+            Row aSupprimer(it, liste.end());
+            liste.erase(it, liste.end());
+            if (helper(mat, p, c+1, liste))
+                return true;
+            // else
+            for (int x : debut)
+                mat[x].pop_back();
+            liste.insert(liste.end(), aSupprimer.begin(), aSupprimer.end());
+        }
+        return false;
+    }
+}
+
+Matrice macKayNeal(Params p) {
+    Matrice mat;
+    mat.resize(p.k);
+
+    std::vector<int> liste(p.k, 0);
+    std::iota(liste.begin(), liste.end(), 0); // liste[x] = x;
+
+    helper(mat, p, 0, liste);
+    return mat;
+}
+
+Matrice transpose(const Matrice& mat) {
+    unsigned long long int hauteur = mat.size(), largeur = mat[0].size();
+    Matrice result(largeur, Row(hauteur, 0));
+    for (int y = 0; y < hauteur; y++) {
+        for (int  x = 0; x < largeur; x++) {
+            result[x][y] = mat[y][x];
+        }
+    }
+    return result;
+}
+
+void oppose(Matrice& mat) {
+    unsigned long long int hauteur = mat.size(), largeur = mat[0].size();
+    for (int y = 0; y < hauteur; y++) {
+        for (int  x = 0; x < largeur; x++) {
+            mat[y][x] = !mat[y][x];
+        }
+    }
+}
+
+Matrice getP(Matrice H) {
+    size_t largeur = 0;
+    for (Row& row : H) {
+        int tmp = *std::max_element(row.begin(), row.end());
+        if (tmp > largeur)
+            largeur = tmp;
+    }
+    largeur++;
+    size_t hauteur = H.size();
+    gauss_jordan(H);
+    for (auto& row : H) {
+        row.erase(row.begin());
+        for (auto& elem : row)
+            elem -= hauteur;
+    }
+    Matrice P = transpose(toFull(H, largeur - hauteur));
+    oppose(P);
+    return P;
 }
