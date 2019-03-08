@@ -4,9 +4,10 @@
 #include <iostream>
 #include <stdexcept>
 #include <chrono>
+#include <functional>
 
 namespace {
-    const size_t NB_ESSAIS = 10;
+    const size_t NB_ESSAIS = 5;
     std::mt19937 mt(std::chrono::system_clock::now().time_since_epoch().count());
 }
 
@@ -25,12 +26,12 @@ std::ostream& operator<< (std::ostream& os, const Matrice& mat) {
 Matrice operator* (const Matrice& lhs, const Matrice& rhs) {
     size_t hauteur = lhs.size(), largeur = rhs[0].size();
     Matrice result(hauteur, Row(largeur, 0));
-    for (int x = 0; x < largeur; x++) {
-        for (int y = 0; y < hauteur; y++) {
+    for (int x = 0; x < largeur; x++) { // parallelisable
+        for (int y = 0; y < hauteur; y++) { // parallelisable
             for (int z = 0; z < rhs.size(); z++) {
                 result[y][x] += lhs[y][z] * rhs[z][x];
-                result[y][x] %= 2;
             }
+            result[y][x] %= 2;
         }
     }
     return result;
@@ -38,9 +39,9 @@ Matrice operator* (const Matrice& lhs, const Matrice& rhs) {
 
 Matrice toFull(const Matrice& mat, int rowSize) {
     Matrice result(mat.size(), Row(rowSize, 0));
-    for (int i(0); i < mat.size(); i++) {
+    for (int i(0); i < mat.size(); i++) { // parallelisable
         const Row& row = mat[i];
-        for (int val : row)
+        for (int val : row) // parallelisable
             result[i][val] = 1;
     }
 
@@ -51,8 +52,36 @@ int randomInt(int min, int max) {
     return std::uniform_int_distribution<int>(min,max)(mt);
 }
 
+void shuffle_n(Row& row, int n) {
+    int i = 0;
+    while (n--) {
+        std::swap(row[i], row[randomInt(i, row.size()-1)]);
+        i++;
+    }
+}
+
+bool estValide(const Matrice& mat, Params p) {
+    if (mat.size() != p.k)
+        return false;
+    Row count(p.n, 0);
+    for (const Row& row : mat) {
+        if (row.size() != p.j)
+            return false;
+        for (int c : row) {
+            if (c >= p.n)
+                return false;
+            count[c]++;
+        }
+    }
+    for (int c : count) {
+        if (c != p.i)
+            return false;
+    }
+    return true;
+}
+
 void swapColumns(Matrice& mat, int r, int x) {
-    for (Row& row : mat) {
+    for (Row& row : mat) { // parallelisable
         RowIt itr = std::lower_bound(row.begin(), row.end(), r);
         RowIt itx = std::lower_bound(row.begin(), row.end(), x);
         bool r_exists(itr != row.end() && *itr == r);
@@ -87,23 +116,29 @@ void transvection(Row& row_r, Row& row_x) {
 }
 
 void annulation(Matrice& mat, int r) {
-    for (int y(0); y < mat.size(); y++) {
+    for (int y(0); y < mat.size(); y++) { // parallelisable
         if (y != r && std::find(mat[y].begin(), mat[y].end(), r) != mat[y].end()) {
             transvection(mat[r], mat[y]);
         }
     }
 }
 
+namespace {
+    auto getPivot(Matrice& mat, int r) {
+        int y(r-1);
+        RowIt it;
+        do {
+            y++;
+            it = std::lower_bound(mat[y].begin(), mat[y].end(), r);
+        } while (y < mat.size()-1 && it == mat[y].end());
+        return std::pair((it == mat[y].end() ? -1 : *it), y);
+    }
+}
+
 Matrice gauss_jordan(Matrice mat) {
     for (int r(0); r < mat.size(); r++) {
-        int y(r);
-        RowIt it = std::find_if(mat[y].begin(), mat[y].end(), [r](int x){ return x >= r; });
-        while (y < mat.size()-1 && it == mat[y].end()) {
-            y++;
-            it = std::find_if(mat[y].begin(), mat[y].end(), [r](int x){ return x >= r; });
-        }
-        if (it != mat[y].end()) {
-            int x = *it;
+        auto [x, y] = getPivot(mat, r);
+        if (x != -1) {
             if (y != r)
                 std::swap(mat[y], mat[r]);
             if (x != r)
@@ -116,7 +151,7 @@ Matrice gauss_jordan(Matrice mat) {
 
 bool isFullRank(const Matrice& mat) {
     size_t hauteur = mat.size();
-    for (int i = 0; i < hauteur; i++) {
+    for (int i = 0; i < hauteur; i++) { // parallelisable
         if (mat[i].empty() || mat[i][0] != i ||(mat[i].size() > 1 && mat[i][1] < hauteur))
             return false;
     }
@@ -150,29 +185,27 @@ Matrice gallager(Params p) {
 }
 
 namespace {
-    bool helper(Matrice& mat, const Params& p, int c, Row& liste) {
+    bool helper(Matrice& mat, const Params& p, int c, Row& liste, const std::function<bool(int)>& pred) {
         if (c == p.n)
             return liste.empty();
         if (liste.size() < p.i)
             return false;
 
-        for (int _ = 0; _ < NB_ESSAIS; _++) {
-            std::shuffle(liste.begin(), liste.end(), mt);
-            Row debut(liste.begin(), liste.begin()+p.i);
-            for (int x : debut)
+        for (int essai = 0; essai < NB_ESSAIS; essai++) { // parallelisable
+            shuffle_n(liste, p.i);
+            Row lignesChoisies(liste.begin(), liste.begin()+p.i);
+            for (int x : lignesChoisies) // parallelisable
                 mat[x].push_back(c);
-            std::sort(liste.begin(), liste.end(), [&p, &mat](int x, int y){
-                return mat[x].size() < p.j;
-            });
-            RowIt it = std::find_if(liste.begin(), liste.end(), [&p, &mat](int x){ return mat[x].size() >= p.j; });
-            Row aSupprimer(it, liste.end());
-            liste.erase(it, liste.end());
-            if (helper(mat, p, c+1, liste))
+            Row lignesPleines(p.i, 0);
+            lignesPleines.erase(std::copy_if(liste.begin(), liste.end(), lignesPleines.begin(), pred), lignesPleines.end());
+            liste.erase(std::remove_if(liste.begin(), liste.end(), pred), liste.end());
+
+            if (helper(mat, p, c+1, liste, pred))
                 return true;
-            // else
-            for (int x : debut)
+
+            for (int x : lignesChoisies) // parallelisable
                 mat[x].pop_back();
-            liste.insert(liste.end(), aSupprimer.begin(), aSupprimer.end());
+            liste.insert(liste.end(), lignesPleines.begin(), lignesPleines.end());
         }
         return false;
     }
@@ -185,46 +218,38 @@ Matrice macKayNeal(Params p) {
     std::vector<int> liste(p.k, 0);
     std::iota(liste.begin(), liste.end(), 0); // liste[x] = x;
 
-    helper(mat, p, 0, liste);
+    auto pred = [&p, &mat](int x){ return mat[x].size() >= p.j; };
+
+    helper(mat, p, 0, liste, pred);
     return mat;
 }
 
 Matrice transpose(const Matrice& mat) {
     unsigned long long int hauteur = mat.size(), largeur = mat[0].size();
     Matrice result(largeur, Row(hauteur, 0));
-    for (int y = 0; y < hauteur; y++) {
-        for (int  x = 0; x < largeur; x++) {
+    for (int y = 0; y < hauteur; y++) { // parallelisable
+        for (int  x = 0; x < largeur; x++) { // parallelisable
             result[x][y] = mat[y][x];
         }
     }
     return result;
 }
 
-void oppose(Matrice& mat) {
+void comp2(Matrice& mat) {
     unsigned long long int hauteur = mat.size(), largeur = mat[0].size();
-    for (int y = 0; y < hauteur; y++) {
-        for (int  x = 0; x < largeur; x++) {
+    for (int y = 0; y < hauteur; y++) { // parallelisable
+        for (int  x = 0; x < largeur; x++) { // parallelisable
             mat[y][x] = !mat[y][x];
         }
     }
 }
 
-Matrice getP(Matrice H) {
-    size_t largeur = 0;
-    for (Row& row : H) {
-        int tmp = *std::max_element(row.begin(), row.end());
-        if (tmp > largeur)
-            largeur = tmp;
-    }
-    largeur++;
-    size_t hauteur = H.size();
+Matrice getP(Matrice H, Params p) {
     gauss_jordan(H);
-    for (auto& row : H) {
+    for (auto& row : H) { // parallelisable
         row.erase(row.begin());
-        for (auto& elem : row)
-            elem -= hauteur;
+        for (auto& elem : row) // parallelisable
+            elem -= p.k;
     }
-    Matrice P = transpose(toFull(H, largeur - hauteur));
-    oppose(P);
-    return P;
+    return transpose(toFull(H, p.n - p.k));
 }
