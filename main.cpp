@@ -1,50 +1,58 @@
 #include "fonctions.hpp"
+#include "SparseMatrix.hpp"
+#include "FullMatrix.hpp"
+#include "decode.hpp"
 #include <iostream>
 #include <algorithm>
-
-/** TODO :
- * Faire la diff entre MatricePleine et MatriceCreuse
- * Checker les dimensions dans le produit
- * Passer en POO
-**/
+#include <vector>
 
 int main()
 {
-    Params p(12, 8, 9);
-    /*
-    Matrice H;
-    Matrice G;
-    do {
-        H = macKayNeal(p);
-        G = gauss_jordan(H);
-    } while (!isFullRank(G));*/
-    Matrice H {
-        {0,1,2,3},
-        {4,5,6,7},
-        {8,9,10,11},
+    /*Params p(12, 4, 9);
+    std::vector< std::vector<int> > exempleMat({
+        {0,5,7,9},
+        {0,3,4,10},
+        {1,4,6,8},
+        {2,5,10,11},
+        {2,6,7,11},
+        {1,4,8,10},
         {0,3,6,9},
-        {1,4,7,10},
-        {2,5,8,11},
-        {0,1,6,7},
-        {2,3,8,9},
-        {4,5,10,11}
-    };
-    Matrice G = gauss_jordan(H);
-    std::cerr << "H :\n" << H << std::endl;
-    std::cerr << "H est valide ? " << estValide(H, p) << std::endl;
-    std::cerr << "G :\n" << G << std::endl;
-    std::cerr << "H est full-rank ? " << isFullRank(G) << std::endl;
+        {1,5,7,9},
+        {2,3,8,11}
+    });
+    SparseMatrix H(p, std::move(exempleMat));*/
 
-    Matrice P = getP(G, p);
-    std::cerr << "P:\n" << P << std::endl;
+    Params p(1000, 4, 750);
+    float proba = 0.05;
+    SparseMatrix H = macKayNeal(p);
+    SparseMatrix G = gauss_jordan(H);
+    //std::cerr << "H :\n" << H << std::endl;
+    std::cerr << "H est valide ? " << H.estValide() << std::endl;
+    //std::cerr << "G :\n" << G << std::endl;
+    bool fullRank = G.isFullRank();
+    std::cerr << "H est full-rank ? " << fullRank << std::endl;
 
-    Matrice u {Row(p.n-p.k)};
-    std::generate(u[0].begin(), u[0].end(), [](){ return randomInt(0, 1); });
-    std::cerr << "u :\t" << u << std::endl;
+    if (fullRank) {
+        FullMatrix P = getP(G);
+        //std::cerr << "P:\n" << P << std::endl;
 
-    Matrice code = u * P;
-    code[0].insert(code[0].end(), u[0].begin(), u[0].end());
-    std::cerr << "code :\t" << code << std::endl;
+        std::vector<bool> message(p.n-p.k, false);
+        //std::generate(message.begin(), message.end(), [](){ return symError(0.5); });
+        //std::cerr << "message :\t" << message << std::endl;
+
+        std::vector<bool> code = (FullMatrix(message, true) * P)[0];
+        code.insert(code.end(), message.begin(), message.end());
+        //std::cerr << "code :\t" << code << std::endl;
+
+        canalSym(code, proba);
+        std::cerr << "poids du code bruite :\t" << poids(code) << std::endl;
+
+        std::vector<float> gamma = LLR_Sym(code, proba);
+        //std::cerr << "gamma :\t" << gamma << std::endl;
+
+        std::vector<bool> resultat = SPA(code, H, gamma);
+        std::cerr << "poids du resultat :\t" << poids(resultat) << std::endl;
+    }
 
     return 0;
 }
