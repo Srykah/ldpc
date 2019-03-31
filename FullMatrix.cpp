@@ -68,6 +68,8 @@ FullMatrix& FullMatrix::comp2() {
             matrix[y][x] = !matrix[y][x];
         }
     }
+
+    return *this;
 }
 
 FullMatrix operator* (const FullMatrix& lhs, const FullMatrix& rhs) {
