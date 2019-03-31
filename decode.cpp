@@ -34,7 +34,7 @@ std::vector<float> LLR_Gauss(const std::vector<bool>& code, float sigma) {
     return LLR_Sym(code, 0.5*std::erfc(1.f/(sigma*std::sqrt(2))));
 }
 
-std::vector<bool> algoAGallager(std::vector<bool> code, const SparseMatrix& H, float proba) {
+std::vector<bool> algoAGallager(std::vector<bool> code, const SparseMatrix& H) {
     auto p = H.getParams();
     auto Ht = H;
     Ht.transpose();
@@ -83,14 +83,12 @@ std::vector<bool> algoAGallager(std::vector<bool> code, const SparseMatrix& H, f
         }
     }
 
-
     for (int v = 0; v < p.n; v++) {
         int count = 0;
         for (int c_v = 0; c_v < p.i; c_v++) {
-            count += (VtoC[v][c_v] != code[v]);
+            count += VtoC[v][c_v]; // on compte le nombre de messages à 1 envoyés depuis la variable
         }
-        if (count >= proba * p.i)
-            code[v] = !code[v];
+        code[v] = (count > 0.5 * p.i); // le seuil de décision est la moitié des CN par VN.
     }
 
     std::cerr << "Code apres correction : " << code << std::endl;

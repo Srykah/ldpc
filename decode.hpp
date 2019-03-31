@@ -12,7 +12,7 @@ void canalSym(std::vector<bool>& code, float proba);
 void BIAWGNC(std::vector<bool>& code, float sigma);
 std::vector<float> LLR_Sym(const std::vector<bool>& code, float proba);
 std::vector<float> LLR_Gauss(const std::vector<bool>& code, float sigma);
-std::vector<bool> algoAGallager(std::vector<bool> code, const SparseMatrix& H, float proba);
+std::vector<bool> algoAGallager(std::vector<bool> code, const SparseMatrix& H);
 std::vector<bool> SPA(std::vector<bool> code, const SparseMatrix& H, std::vector<float> gamma);
 
 #endif //LDPC_DECODE_HPP
