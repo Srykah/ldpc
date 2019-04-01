@@ -5,53 +5,63 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <cmath>
+
+#define NB_MAT 5
+#define NB_CODES 20
 
 int main()
 {
-    /*Params p(12, 4, 9);
-    std::vector< std::vector<int> > exempleMat({
-        {0,5,7,9},
-        {0,3,4,10},
-        {1,4,6,8},
-        {2,5,10,11},
-        {2,6,7,11},
-        {1,4,8,10},
-        {0,3,6,9},
-        {1,5,7,9},
-        {2,3,8,11}
-    });
-    SparseMatrix H(p, std::move(exempleMat));*/
-
-    Params p(1000, 4, 750);
-    float proba = 0.05;
-    SparseMatrix H = macKayNeal(p);
-    SparseMatrix G = gauss_jordan(H);
-    //std::cerr << "H :\n" << H << std::endl;
-    std::cerr << "H est valide ? " << H.estValide() << std::endl;
-    //std::cerr << "G :\n" << G << std::endl;
-    bool fullRank = G.isFullRank();
-    std::cerr << "H est full-rank ? " << fullRank << std::endl;
-
-    if (fullRank) {
-        FullMatrix P = getP(G);
-        //std::cerr << "P:\n" << P << std::endl;
-
-        std::vector<bool> message(p.n-p.k, false);
-        //std::generate(message.begin(), message.end(), [](){ return symError(0.5); });
-        //std::cerr << "message :\t" << message << std::endl;
-
-        std::vector<bool> code = (FullMatrix(message, true) * P)[0];
-        code.insert(code.end(), message.begin(), message.end());
-        //std::cerr << "code :\t" << code << std::endl;
-
-        canalSym(code, proba);
-        std::cerr << "poids du code bruite :\t" << poids(code) << std::endl;
-
-        std::vector<float> gamma = LLR_Sym(code, proba);
-        //std::cerr << "gamma :\t" << gamma << std::endl;
-
-        std::vector<bool> resultat = SPA(code, H, gamma);
-        std::cerr << "poids du resultat :\t" << poids(resultat) << std::endl;
+    std::vector<Params> params = {
+      {12,4,9},
+      {1000,4,750},
+      {1000,100,750},
+      {10000,5,6000},
+      {10000,25,6000},
+      {64800, 4, 48600}
+    };
+    std::vector<float> probas = {
+      0.0003,
+      0.003,
+      0.03,
+      0.3,
+    };
+    for (auto p : params) {
+      std::cout << "Params = (" << p.n << ',' << p.j << ',' << p.k << ')' << std::endl;
+      std::clog << '|';
+      int numFullRank = 0;
+      for (int matNum = 0; matNum < NB_MAT; matNum++) {
+        std::cout << "\tMatrice n°" << matNum << std::endl;
+        std::clog << '#';
+        SparseMatrix H = macKayNeal(p);
+        SparseMatrix G = gauss_jordan(H);
+        if (G.isFullRank()) {
+          numFullRank++;
+          FullMatrix P = getP(G);
+          for (float proba : probas) {
+            float spaOutputErrorRatio = 0.f;
+            float gallagerOutputErrorRatio = 0.f;
+            int numCorruptedCodes = 0;
+            while (numCorruptedCodes < NB_CODES) {
+              std::vector<bool> code(p.n, false);
+              canalSym(code, proba);
+              if (poids(code) != 0) {
+                std::clog << '.';
+                numCorruptedCodes++;
+                std::vector<float> gamma = LLR_Sym(code, proba);
+                std::vector<bool> resultatSPA = SPA(code, H, gamma);
+                std::vector<bool> resultatGallager = algoAGallager(code, H);
+                spaOutputErrorRatio += float(poids(resultatSPA))/float(poids(code));
+                gallagerOutputErrorRatio += float(poids(resultatGallager))/float(poids(code));
+              }
+            }
+            spaOutputErrorRatio /= NB_CODES;
+            gallagerOutputErrorRatio /= NB_CODES;
+            std::cout << "\t\tProba = " << proba << ", TES SPA : " << spaOutputErrorRatio << ", TES Gallager : " << gallagerOutputErrorRatio << std::endl;
+          }
+        }
+      }
+      std::cout << "\tNombre de matrices de rang maximum : " << numFullRank << std::endl;
     }
 
     return 0;

@@ -82,8 +82,6 @@ SparseMatrix gallager(Params p) {
 }
 
 bool helper(SparseMatrix& mat, int c, std::vector<int>& liste, const std::function<bool(int)>& pred) {
-    if (c % 1000 == 0)
-        std::cerr << c << ' ';
     if (c == mat.getParams().n)
         return liste.empty();
     if (liste.size() < mat.getParams().i)

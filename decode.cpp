@@ -91,8 +91,7 @@ std::vector<bool> algoAGallager(std::vector<bool> code, const SparseMatrix& H) {
         code[v] = (count > 0.5 * p.i); // le seuil de décision est la moitié des CN par VN.
     }
 
-    std::cerr << "Code apres correction : " << code << std::endl;
-    return std::vector<bool>(code.begin()+p.k, code.end());
+    return code;
 }
 
 std::vector<bool> SPA(std::vector<bool> code, const SparseMatrix& H, std::vector<float> gamma) {
