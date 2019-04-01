@@ -1,32 +1,68 @@
-#include <iostream>
 #include "fonctions.hpp"
+#include "SparseMatrix.hpp"
+#include "FullMatrix.hpp"
+#include "decode.hpp"
+#include <iostream>
+#include <algorithm>
+#include <vector>
+#include <cmath>
+
+#define NB_MAT 5
+#define NB_CODES 20
 
 int main()
 {
-    Matrice test({
-        { 0, 5, 7, 9 },
-        { 0, 3, 4, 10 },
-        { 1, 4, 6, 8 },
-        { 2, 5, 10, 11 },
-        { 2, 6, 7, 11 },
-        { 1, 4, 8, 10 },
-        { 0, 3, 6, 9 },
-        { 1, 5, 7, 9 },
-        { 2, 3, 8, 11 }
-    });
-
-    Matrice test2({
-        { 1, 2, 4, 5 },
-        { 0, 1, 3, 4 },
-        { 0, 2, 3, 5 }
-    });
-
-    // gauss_jordan(test);
-    // std::cout << "\ntest :\n" << test << "\ntest2 :\n" << test2 << std::endl;
-
-    Matrice test3 = gallager(12, 4, 9);
-
-    std::cout << "\ntest3 : \n" << test3 << std::endl;
+    std::vector<Params> params = {
+      {12,4,9},
+      {1000,4,750},
+      {1000,100,750},
+      {10000,5,6000},
+      {10000,25,6000},
+      {64800, 4, 48600}
+    };
+    std::vector<float> probas = {
+      0.0003,
+      0.003,
+      0.03,
+      0.3,
+    };
+    for (auto p : params) {
+      std::cout << "Params = (" << p.n << ',' << p.j << ',' << p.k << ')' << std::endl;
+      std::clog << '|';
+      int numFullRank = 0;
+      for (int matNum = 0; matNum < NB_MAT; matNum++) {
+        std::cout << "\tMatrice n°" << matNum << std::endl;
+        std::clog << '#';
+        SparseMatrix H = macKayNeal(p);
+        SparseMatrix G = gauss_jordan(H);
+        if (G.isFullRank()) {
+          numFullRank++;
+          FullMatrix P = getP(G);
+          for (float proba : probas) {
+            float spaOutputErrorRatio = 0.f;
+            float gallagerOutputErrorRatio = 0.f;
+            int numCorruptedCodes = 0;
+            while (numCorruptedCodes < NB_CODES) {
+              std::vector<bool> code(p.n, false);
+              canalSym(code, proba);
+              if (poids(code) != 0) {
+                std::clog << '.';
+                numCorruptedCodes++;
+                std::vector<float> gamma = LLR_Sym(code, proba);
+                std::vector<bool> resultatSPA = SPA(code, H, gamma);
+                std::vector<bool> resultatGallager = algoAGallager(code, H);
+                spaOutputErrorRatio += float(poids(resultatSPA))/float(poids(code));
+                gallagerOutputErrorRatio += float(poids(resultatGallager))/float(poids(code));
+              }
+            }
+            spaOutputErrorRatio /= NB_CODES;
+            gallagerOutputErrorRatio /= NB_CODES;
+            std::cout << "\t\tProba = " << proba << ", TES SPA : " << spaOutputErrorRatio << ", TES Gallager : " << gallagerOutputErrorRatio << std::endl;
+          }
+        }
+      }
+      std::cout << "\tNombre de matrices de rang maximum : " << numFullRank << std::endl;
+    }
 
     return 0;
 }

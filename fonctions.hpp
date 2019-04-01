@@ -1,26 +1,29 @@
 #ifndef LDPC_FONCTIONS_HPP
 #define LDPC_FONCTIONS_HPP
 
+#include "Params.hpp"
 #include <vector>
 #include <iostream>
 
-using Row = std::vector< int >;
-using Matrice = std::vector< Row >;
-using RowIt = Row::iterator;
+class SparseMatrix;
+class FullMatrix;
 
-std::ostream& operator<< (std::ostream& os, const Matrice& mat);
+int randomInt(int min, int max);
+template <typename T>
+void shuffle_n(std::vector<T>& vec, int n);
+bool symError(float proba);
+int poids(const std::vector<bool>& vec);
 
-void swapColumns(Matrice& mat, int r, int x);
-void transvection(Row& row_r, Row& row_x);
-void annulation(Matrice& mat, int r);
+SparseMatrix gauss_jordan(SparseMatrix H);
 
-void gauss_jordan(Matrice& mat);
+SparseMatrix gallager(Params p);
+SparseMatrix macKayNeal(Params p);
 
-/// @brief Génère une matrice de Gallager
-/// @param n nombre de colonnes
-/// @param j nombre de 1 par ligne
-/// @param k nombre de lignes
-/// @return la matrice de Gallager
-Matrice gallager(int n, int j, int k);
+FullMatrix getP(SparseMatrix G);
+
+template <typename T>
+std::ostream& operator<<(std::ostream& out, std::vector<T> vec);
+
+#include "fonctions.inl"
 
 #endif //LDPC_FONCTIONS_HPP

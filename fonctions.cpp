@@ -1,122 +1,129 @@
 #include "fonctions.hpp"
+#include "SparseMatrix.hpp"
+#include "FullMatrix.hpp"
 #include <algorithm>
 #include <random>
 #include <iostream>
 #include <stdexcept>
+#include <chrono>
+#include <functional>
 
-std::ostream& operator<< (std::ostream& os, const Matrice& mat) {
-    for (const Row& row : mat) {
-        for (int x : row) {
-            os << x << '\t';
-        }
-        os << '\n';
+namespace {
+    const size_t NB_ESSAIS = 5;
+    std::mt19937 mt(std::chrono::system_clock::now().time_since_epoch().count());
+}
+
+int randomInt(int min, int max) {
+    return std::uniform_int_distribution<int>(min,max)(mt);
+}
+
+bool symError(float proba) {
+    return std::uniform_real_distribution<float>(0.f, 1.f)(mt) <= proba;
+}
+
+int poids(const std::vector<bool>& vec) {
+    int res = 0;
+    for (int x : vec) {
+        if (x)
+            res++;
     }
-
-    return os;
+    return res;
 }
 
 namespace {
-    std::random_device rd;
-    std::mt19937 mt(rd());
-    int randint(int min, int max) {
-        return std::uniform_int_distribution<>(min, max)(mt);
-    }
-    auto pred = [](auto& elem){ return true; };
-}
-
-void swapColumns(Matrice& mat, int r, int x) {
-    for (Row& row : mat) {
-        RowIt itr = std::lower_bound(row.begin(), row.end(), r);
-        RowIt itx = std::lower_bound(row.begin(), row.end(), x);
-        bool r_exists(itr != row.end() && *itr == r);
-        bool x_exists(itx != row.end() && *itx == x);
-        if (x_exists && !r_exists) {
-            row.erase(itx);
-            row.insert(itr, r);
-        } else if (r_exists && !x_exists) {
-            int distr = std::distance(row.begin(), itr); // reallocation
-            row.insert(itx, x);
-            row.erase(row.begin()+distr);
-        }
-    }
-}
-
-void transvection(Row& row_r, Row& row_x) {
-    int ir = row_r.size()-1;
-    int ix = row_x.size()-1;
-    while (ir >= 0 && ix >= 0) {
-        int valr = row_r[ir], valx = row_x[ix];
-        if (valr == valx) {
-            row_x.erase(row_x.begin()+ix);
-            ix--;
-            ir--;
-        } else if (valr < valx) {
-            ix--;
-        } else { // valr > valx
-            row_x.insert(row_x.begin()+ix+1, valr);
-            ir--;
-        }
-    }
-}
-
-void annulation(Matrice& mat, int r) {
-    for (int y(r+1); y < mat.size(); y++) {
-        if (std::find(mat[y].begin(), mat[y].end(), r) != mat[y].end()) {
-            transvection(mat[r], mat[y]);
-        }
-    }
-}
-
-void gauss_jordan(Matrice& mat) {
-    for (int r(0); r < mat.size(); r++) {
-        std::cout << "r = " << r << std::endl;
-        RowIt it = std::find_if(mat[r].begin()+r, mat[r].end(), pred);
-        int y(r);
-        while (y < mat.size()-1 && it == mat[y].end()) {
+    auto getPivot(SparseMatrix& mat, int r) {
+        int y(r-1);
+        SparseRow::const_iterator it;
+        do {
             y++;
-            it = std::find_if(mat[y].begin()+r, mat[y].end(), pred);
-        }
-        if (it != mat[y].end()) {
-            int x = *it;
-            std::cout << "\t(x,y) = (" << x << ',' << y << ')' << std::endl;
-            if (y != r) {
-                std::cout << "\tswapping lines " << r << " and " << y << std::endl;
-                std::swap(mat[y], mat[r]);
-            }
-            if (x != r) {
-                std::cout << "\tswapping columns " << r << " and " << x << std::endl;
-                swapColumns(mat, r, x);
-            }
-            annulation(mat, r);
-        }
+            it = std::lower_bound(mat[y].begin(), mat[y].end(), r);
+        } while (y < mat.getParams().k-1 && it == mat[y].end());
+        return std::pair((it == mat[y].end() ? -1 : *it), y);
     }
 }
 
-Matrice gallager(int n, int j, int k) {
-    if (n/float(j) != n/j)
+SparseMatrix gauss_jordan(SparseMatrix H) {
+    for (int r(0); r < H.getParams().k; r++) {
+        auto [x, y] = getPivot(H, r);
+        if (x != -1) {
+            if (y != r)
+                H.swapRows(r, y);
+            if (x != r)
+                H.swapColumns(r, x);
+            H.annulation(r);
+        }
+    }
+    return H;
+}
+
+SparseMatrix gallager(Params p) {
+    if (p.n/float(p.j) != p.n/p.j)
         throw std::domain_error("Gallager : invalid arguments");
 
-    int i = k*j/n;
-    Matrice matrice;
-    matrice.resize(k);
+    SparseMatrix result(p);
 
-    std::vector<int> perm(n, 0);
-    for (int x = 0; x < n; x++) {
-        perm[x] = x;
-    }
+    std::vector<int> perm(p.n, 0);
+    std::iota(perm.begin(), perm.end(), 0); // perm[x] = x;
 
-    for (int r = 0; r < n/j; r++) { // w = indice de la ligne dans la sous-matrice
-        for (int c = r*j; c < (r+1)*j; c++) {// s = indice de la colonne
-            matrice[r].push_back(c);
+    for (int r = 0; r < p.n/p.j; r++) { // r = indice de la ligne dans la sous-matrice // parallelisable
+        for (int c = r*p.j; c < (r+1)*p.j; c++) { // c = indice de la colonne
+            result.matrix[r].push_back(c);
         }
     }
-    for (int s = 1; s < n/j; s++) { // s = indice de la sous-matrice
+    for (int s = 1; s < p.n/p.j; s++) { // s = indice de la sous-matrice // parallelisable
         std::shuffle(perm.begin(), perm.end(), mt);
-        for (int c = 0; c < n; c++) {
-            int r = s*(n/j) + int(perm[c] / j);
-            matrice[r].push_back(c);
+        for (int c = 0; c < p.n; c++) {
+            int r = s*(p.n/p.j) + perm[c] / p.j;
+            result.matrix[r].push_back(c);
         }
     }
 
-    return matrice;
+    return result;
+}
+
+bool helper(SparseMatrix& mat, int c, std::vector<int>& liste, const std::function<bool(int)>& pred) {
+    if (c == mat.getParams().n)
+        return liste.empty();
+    if (liste.size() < mat.getParams().i)
+        return false;
+
+    for (int essai = 0; essai < NB_ESSAIS; essai++) { // parallelisable
+        shuffle_n(liste, mat.getParams().i);
+        std::vector<int> lignesChoisies(liste.begin(), liste.begin()+mat.getParams().i);
+        for (int x : lignesChoisies) // parallelisable
+            mat.matrix[x].push_back(c);
+        std::vector<int> lignesPleines(mat.getParams().i, 0);
+        lignesPleines.erase(std::copy_if(liste.begin(), liste.end(), lignesPleines.begin(), pred), lignesPleines.end());
+        liste.erase(std::remove_if(liste.begin(), liste.end(), pred), liste.end());
+
+        if (helper(mat, c+1, liste, pred))
+            return true;
+
+        for (int x : lignesChoisies) // parallelisable
+            mat.matrix[x].pop_back();
+        liste.insert(liste.end(), lignesPleines.begin(), lignesPleines.end());
+    }
+    return false;
+}
+
+SparseMatrix macKayNeal(Params p) {
+    SparseMatrix mat(p);
+
+    std::vector<int> liste(p.k, 0);
+    std::iota(liste.begin(), liste.end(), 0); // liste[x] = x;
+
+    auto pred = [&p, &mat](int x){ return mat[x].size() >= p.j; };
+
+    helper(mat, 0, liste, pred);
+    return mat;
+}
+
+FullMatrix getP(SparseMatrix G) {
+    for (auto& row : G.matrix) { // parallelisable
+        row.erase(row.begin());
+        for (auto& elem : row) // parallelisable
+            elem -= G.p.k;
+    }
+    G.p.n -= G.p.k;
+    return G.toFull().transpose();
 }
