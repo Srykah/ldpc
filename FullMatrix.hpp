@@ -12,7 +12,7 @@ using FullRow = std::vector<bool>;
 
 class FullMatrix {
 public:
-    FullMatrix(size_t width, size_t height);
+    FullMatrix(size_t height, size_t width);
     FullMatrix(const FullRow& vec, bool horizontal);
     explicit FullMatrix(std::vector<FullRow>&& init);
 

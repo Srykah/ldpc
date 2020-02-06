@@ -15,16 +15,16 @@ int main()
     std::vector<Params> params = {
       {12,4,9},
       {1000,4,750},
-      {1000,100,750},
+      {1000,12,750},
       {10000,5,6000},
-      {10000,25,6000},
-      {64800, 4, 48600}
+      {10000,10,6000},
+      {64800,4,48600}
     };
     std::vector<float> probas = {
-      0.0003,
-      0.003,
-      0.03,
-      0.3,
+      0.01,
+      0.05,
+      0.1,
+      0.33,
     };
     for (auto p : params) {
       std::cout << "Params = (" << p.n << ',' << p.j << ',' << p.k << ')' << std::endl;
@@ -40,20 +40,19 @@ int main()
           FullMatrix P = getP(G);
           for (float proba : probas) {
             float spaOutputErrorRatio = 0.f;
-            float gallagerOutputErrorRatio = 0.f;
-            int numCorruptedCodes = 0;
-            while (numCorruptedCodes < NB_CODES) {
+            float gallagerOutputErrorRatio = 0;
+            for (int numCodes = 0; numCodes < NB_CODES; numCodes++) {
               std::vector<bool> code(p.n, false);
               canalSym(code, proba);
-              if (poids(code) != 0) {
-                std::clog << '.';
-                numCorruptedCodes++;
+              int wCode = poids(code);
+              if (wCode != 0.f) {
                 std::vector<float> gamma = LLR_Sym(code, proba);
-                std::vector<bool> resultatSPA = SPA(code, H, gamma);
+                std::vector<bool> resultatSPA = SPA(gamma, H);
                 std::vector<bool> resultatGallager = algoAGallager(code, H);
-                spaOutputErrorRatio += float(poids(resultatSPA))/float(poids(code));
-                gallagerOutputErrorRatio += float(poids(resultatGallager))/float(poids(code));
+                spaOutputErrorRatio += float(poids(resultatSPA))/float(wCode);
+                gallagerOutputErrorRatio += float(poids(resultatGallager))/float(wCode);
               }
+              std::clog << '.';
             }
             spaOutputErrorRatio /= NB_CODES;
             gallagerOutputErrorRatio /= NB_CODES;
@@ -61,7 +60,6 @@ int main()
           }
         }
       }
-      std::cout << "\tNombre de matrices de rang maximum : " << numFullRank << std::endl;
     }
 
     return 0;

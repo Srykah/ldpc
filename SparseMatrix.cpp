@@ -38,7 +38,7 @@ void SparseMatrix::swapColumns(int c1, int c2) {
 }
 
 FullMatrix SparseMatrix::toFull() const {
-    FullMatrix result(p.n, p.k);
+    FullMatrix result(p.k, p.n);
     for (int i(0); i < p.k; i++) { // parallelisable
         for (int val : matrix[i]) // parallelisable
             result[i][val] = true;

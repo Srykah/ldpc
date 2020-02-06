@@ -4,7 +4,7 @@
 
 #include "FullMatrix.hpp"
 
-FullMatrix::FullMatrix(size_t width, size_t height)
+FullMatrix::FullMatrix(size_t height, size_t width)
 : matrix(height, FullRow(width, false)) {}
 
 FullMatrix::FullMatrix(const FullRow &vec, bool horizontal) {
@@ -73,7 +73,7 @@ FullMatrix& FullMatrix::comp2() {
 }
 
 FullMatrix operator* (const FullMatrix& lhs, const FullMatrix& rhs) {
-    FullMatrix result(rhs.width(),lhs.height());
+    FullMatrix result(lhs.height(), rhs.width());
     for (int x = 0; x < rhs.width(); x++) { // parallelisable
         for (int y = 0; y < lhs.height(); y++) { // parallelisable
             for (int z = 0; z < lhs.width(); z++) { // more or less parallelisable
